@@ -93,40 +93,70 @@ func TestAPI(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
-	t.Run("DELETE /parts/{id} удаляет деталь", func(t *testing.T) {
-		created := repo.Create(Part{Name: "Титановая обшивка", Type: "fuel", Quantity: 1, Weight: 50})
-		url := fmt.Sprintf("%s/parts/%d", server.URL, created.ID)
+	t.Run("POST /parts/{id}/withdraw списывает детали", func(t *testing.T) {
+		created := repo.Create(Part{Name: "Титановая обшивка", Type: "hull", Quantity: 100, Weight: 50})
+		url := fmt.Sprintf("%s/parts/%d/withdraw", server.URL, created.ID)
+		body := bytes.NewBufferString(`{"quantity":10}`)
 
-		req, err := http.NewRequest(http.MethodDelete, url, nil)
-		require.NoError(t, err)
-
-		resp, err := client.Do(req)
+		resp, err := client.Post(url, "application/json", body)
 		require.NoError(t, err)
 		defer func() { _ = resp.Body.Close() }()
 
-		require.Equal(t, http.StatusNoContent, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
-	t.Run("DELETE /parts/{id} возвращает 404 для несуществующей детали", func(t *testing.T) {
-		url := fmt.Sprintf("%s/parts/%d", server.URL, 99999)
+	t.Run("POST /parts/{id}/withdraw возвращает 400 при недостатке деталей", func(t *testing.T) {
+		created := repo.Create(Part{Name: "Титановая обшивка", Type: "hull", Quantity: 5, Weight: 50})
+		url := fmt.Sprintf("%s/parts/%d/withdraw", server.URL, created.ID)
+		body := bytes.NewBufferString(`{"quantity":50}`)
 
-		req, err := http.NewRequest(http.MethodDelete, url, nil)
+		resp, err := client.Post(url, "application/json", body)
 		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
 
-		resp, err := client.Do(req)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST /parts/{id}/withdraw возвращает 404 для несуществующей детали", func(t *testing.T) {
+		url := fmt.Sprintf("%s/parts/%d/withdraw", server.URL, 12345)
+		body := bytes.NewBufferString(`{"quantity":50}`)
+
+		resp, err := client.Post(url, "application/json", body)
 		require.NoError(t, err)
 		defer func() { _ = resp.Body.Close() }()
 
 		require.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 
-	t.Run("DELETE /parts/{id} возвращает 400 для невалидного ID", func(t *testing.T) {
-		url := fmt.Sprintf("%s/parts/%s", server.URL, "not_a_number")
+	t.Run("POST /parts/{id}/withdraw возвращает 400 для невалидного ID", func(t *testing.T) {
+		url := server.URL + "/parts/not-a-number/withdraw"
+		body := bytes.NewBufferString(`{"quantity":10}`)
 
-		req, err := http.NewRequest(http.MethodDelete, url, nil)
+		resp, err := client.Post(url, "application/json", body)
 		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
 
-		resp, err := client.Do(req)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST /parts/{id}/withdraw возвращает 400 для quantity <= 0", func(t *testing.T) {
+		created := repo.Create(Part{Name: "Солнечная панель", Type: "sensor", Quantity: 50, Weight: 50})
+		url := fmt.Sprintf("%s/parts/%d/withdraw", server.URL, created.ID)
+		body := bytes.NewBufferString(`{"quantity":0}`)
+
+		resp, err := client.Post(url, "application/json", body)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST /parts/{id}/withdraw возвращает 400 для невалидного JSON", func(t *testing.T) {
+		created := repo.Create(Part{Name: "Навигационный модуль", Type: "electronics", Quantity: 50, Weight: 50})
+		url := fmt.Sprintf("%s/parts/%d/withdraw", server.URL, created.ID)
+		body := bytes.NewBufferString(`{invalid_json}`)
+
+		resp, err := client.Post(url, "application/json", body)
 		require.NoError(t, err)
 		defer func() { _ = resp.Body.Close() }()
 

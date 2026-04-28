@@ -29,7 +29,13 @@ func (s *partService) CreatePart(name, partType string, quantity int, weight flo
 	return part, nil
 }
 
-// DeletePart удаляет деталь по ID (без проверок)
-func (s *partService) DeletePart(id int64) error {
-	return s.repo.Delete(id)
+// Withdraw списывает детали со склада
+// БЕЗ ВАЛИДАЦИИ - валидация пока в handler (это проблема!)
+func (s *partService) WithdrawPart(id int64, quantity int) error {
+	return s.repo.Withdraw(id, quantity)
+}
+
+// GetPartByID возвращает деталь по ID
+func (s *partService) GetPartByID(id int64) (Part, error) {
+	return s.repo.GetByID(id)
 }

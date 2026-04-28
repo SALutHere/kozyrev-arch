@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -23,7 +24,7 @@ func NewHandler(service *partService) *handler {
 func (h *handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /parts", h.GetParts)
 	mux.HandleFunc("POST /parts", h.CreatePart)
-	mux.HandleFunc("DELETE /parts/{id}", h.DeletePart)
+	mux.HandleFunc("POST /parts/{id}/withdraw", h.WithdrawPart)
 }
 
 // GetParts возвращает список всех деталей
@@ -63,8 +64,7 @@ func (h *handler) CreatePart(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DeletePart удаляет деталь
-func (h *handler) DeletePart(w http.ResponseWriter, r *http.Request) {
+func (h *handler) WithdrawPart(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -72,7 +72,23 @@ func (h *handler) DeletePart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.service.DeletePart(id); err != nil {
+	var input struct {
+		Quantity int `json:"quantity"`
+	}
+	if err = json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "некорректный JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Структурная валидация
+	if input.Quantity <= 0 {
+		http.Error(w, "количество должно быть больше 0", http.StatusBadRequest)
+		return
+	}
+
+	// ПРОБЛЕМА: handler напрямую обращается к service.GetByID и делает бизнес-валидацию!
+	part, err := h.service.GetPartByID(id)
+	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, "деталь не найдена", http.StatusNotFound)
 			return
@@ -81,5 +97,17 @@ func (h *handler) DeletePart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	// ПРОБЛЕМА: бизнес-логика в handler!
+	if part.Quantity < input.Quantity {
+		http.Error(w, fmt.Sprintf("недостаточно деталей: доступно %d, запрошено %d", part.Quantity, input.Quantity), http.StatusBadRequest)
+		return
+	}
+
+	// ПРОБЛЕМА: handler знает про внутреннюю структуру сервиса
+	if err = h.service.WithdrawPart(id, input.Quantity); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

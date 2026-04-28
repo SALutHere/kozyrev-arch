@@ -124,15 +124,31 @@ func (r *partRepository) Create(part Part) Part {
 	return part
 }
 
-// Delete удаляет деталь по ID
-func (r *partRepository) Delete(id int64) error {
+// Withdraw уменьшает количество деталей
+func (r *partRepository) Withdraw(id int64, quantity int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if _, ok := r.storage[id]; !ok {
+	part, ok := r.storage[id]
+	if !ok {
 		return ErrNotFound
 	}
-	delete(r.storage, id)
+
+	part.Quantity -= quantity
+	r.storage[id] = part
 
 	return nil
+}
+
+// GetByID возвращает деталь по ID
+func (r *partRepository) GetByID(id int64) (Part, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	part, ok := r.storage[id]
+	if !ok {
+		return Part{}, ErrNotFound
+	}
+
+	return part, nil
 }
