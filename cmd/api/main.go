@@ -5,16 +5,18 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/SALutHere/kozyrev-arch/internal"
+	"github.com/SALutHere/kozyrev-arch/internal/handler"
+	"github.com/SALutHere/kozyrev-arch/internal/repository"
+	"github.com/SALutHere/kozyrev-arch/internal/service"
 )
 
 const inventoryPath = "data/inventory.csv"
 
 func main() {
 	// Создание зависимостей
-	repo := internal.NewPartRepository()
-	service := internal.NewPartService(repo)
-	handler := internal.NewHandler(service)
+	repo := repository.NewPartRepository()
+	service := service.NewPartService(repo)
+	handler := handler.NewHandler(service)
 
 	// Загрузка данных из CSV
 	if err := repo.LoadFromCSV(inventoryPath); err != nil {

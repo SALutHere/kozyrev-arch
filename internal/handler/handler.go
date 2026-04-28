@@ -1,22 +1,32 @@
-package internal
+package handler
 
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+
+	e "github.com/SALutHere/kozyrev-arch/internal/errors"
+	"github.com/SALutHere/kozyrev-arch/internal/model"
 )
+
+// PartService - интерфейс сервиса для работы с деталями
+// Go-идиома: интерфейс определяется потребителем
+type PartService interface {
+	GetAllParts() []model.Part
+	CreatePart(name, partType string, quantity int, weight float64) (model.Part, error)
+	WithdrawPart(id int64, quantity int) error
+}
 
 // handler - HTTP-обработчики
 // Приватная структура: создание только через NewHandler
 type handler struct {
-	service *partService
+	service PartService
 }
 
 // NewHandler создаёт новый обработчик
-func NewHandler(service *partService) *handler {
+func NewHandler(service PartService) *handler {
 	return &handler{service: service}
 }
 
@@ -86,26 +96,16 @@ func (h *handler) WithdrawPart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ПРОБЛЕМА: handler напрямую обращается к service.GetByID и делает бизнес-валидацию!
-	part, err := h.service.GetPartByID(id)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			http.Error(w, "деталь не найдена", http.StatusNotFound)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// ПРОБЛЕМА: бизнес-логика в handler!
-	if part.Quantity < input.Quantity {
-		http.Error(w, fmt.Sprintf("недостаточно деталей: доступно %d, запрошено %d", part.Quantity, input.Quantity), http.StatusBadRequest)
-		return
-	}
-
-	// ПРОБЛЕМА: handler знает про внутреннюю структуру сервиса
+	// Бизнес валидация уже произведена в сервисе
 	if err = h.service.WithdrawPart(id, input.Quantity); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		switch {
+		case errors.Is(err, e.ErrNotFound):
+			http.Error(w, "деталь не найдена", http.StatusNotFound)
+		case errors.Is(err, e.ErrNotEnoughParts):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 

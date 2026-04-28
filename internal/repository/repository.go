@@ -1,30 +1,30 @@
-package internal
+package repository
 
 import (
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
-)
 
-var ErrNotFound = errors.New("деталь не найдена")
+	e "github.com/SALutHere/kozyrev-arch/internal/errors"
+	"github.com/SALutHere/kozyrev-arch/internal/model"
+)
 
 // partRepository - in-memory хранилище деталей
 // Приватная структура: создание только через NewPartRepository
 type partRepository struct {
 	mu      sync.Mutex
-	storage map[int64]Part
+	storage map[int64]model.Part
 	nextID  int64
 }
 
 // NewPartRepository создаёт новый репозиторий
 func NewPartRepository() *partRepository {
 	return &partRepository{
-		storage: make(map[int64]Part),
+		storage: make(map[int64]model.Part),
 		nextID:  1,
 	}
 }
@@ -83,7 +83,7 @@ func (r *partRepository) LoadFromCSV(path string) error {
 			return fmt.Errorf("не удалось преобразовать вес: %w", err)
 		}
 
-		r.storage[id] = Part{
+		r.storage[id] = model.Part{
 			ID:       id,
 			Name:     record[1],
 			Type:     record[2],
@@ -100,11 +100,11 @@ func (r *partRepository) LoadFromCSV(path string) error {
 }
 
 // GetAll возвращает все детали
-func (r *partRepository) GetAll() []Part {
+func (r *partRepository) GetAll() []model.Part {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	parts := make([]Part, 0, len(r.storage))
+	parts := make([]model.Part, 0, len(r.storage))
 	for _, p := range r.storage {
 		parts = append(parts, p)
 	}
@@ -113,7 +113,7 @@ func (r *partRepository) GetAll() []Part {
 }
 
 // Create сохраняет новую деталь и возвращает её с присвоением ID
-func (r *partRepository) Create(part Part) Part {
+func (r *partRepository) Create(part model.Part) model.Part {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -131,7 +131,7 @@ func (r *partRepository) Withdraw(id int64, quantity int) error {
 
 	part, ok := r.storage[id]
 	if !ok {
-		return ErrNotFound
+		return e.ErrNotFound
 	}
 
 	part.Quantity -= quantity
@@ -141,13 +141,13 @@ func (r *partRepository) Withdraw(id int64, quantity int) error {
 }
 
 // GetByID возвращает деталь по ID
-func (r *partRepository) GetByID(id int64) (Part, error) {
+func (r *partRepository) GetByID(id int64) (model.Part, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	part, ok := r.storage[id]
 	if !ok {
-		return Part{}, ErrNotFound
+		return model.Part{}, e.ErrNotFound
 	}
 
 	return part, nil

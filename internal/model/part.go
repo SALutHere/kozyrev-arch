@@ -1,4 +1,4 @@
-package internal
+package model
 
 // Part - деталь со склада
 type Part struct {
